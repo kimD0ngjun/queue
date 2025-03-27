@@ -56,7 +56,7 @@ public class ReactiveRedisConfig {
     }
 
     @Bean(name = "redisTemplate")
-    public ReactiveRedisTemplate<String, Message> reactiveRedisTemplate(ReactiveRedisConnectionFactory connectionFactory) {
+    public ReactiveRedisTemplate<String, String> reactiveRedisTemplate(ReactiveRedisConnectionFactory connectionFactory) {
         // Jackson Serializer 설정
         ObjectMapper objectMapper = new ObjectMapper()
                 // 모르는 속성에 실패처리 안함
@@ -65,12 +65,12 @@ public class ReactiveRedisConfig {
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATE_KEYS_AS_TIMESTAMPS);
 
-        Jackson2JsonRedisSerializer<Message> serializer =
-                new Jackson2JsonRedisSerializer<>(objectMapper, Message.class);
+        Jackson2JsonRedisSerializer<String> serializer =
+                new Jackson2JsonRedisSerializer<>(objectMapper, String.class);
 
         // Redis 직렬화 컨텍스트 설정
-        RedisSerializationContext<String, Message> context = RedisSerializationContext
-                .<String, Message>newSerializationContext()
+        RedisSerializationContext<String, String> context = RedisSerializationContext
+                .<String, String>newSerializationContext()
                 .key(RedisSerializer.string())
                 .value(serializer)
                 .hashKey(RedisSerializer.string())
