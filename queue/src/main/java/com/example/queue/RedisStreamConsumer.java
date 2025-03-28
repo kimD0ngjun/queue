@@ -10,6 +10,7 @@ import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import org.springframework.data.redis.stream.Subscription;
@@ -28,7 +29,7 @@ public class RedisStreamConsumer
     private Subscription subscription;
 
     private final StreamMessageListenerContainer<String, MapRecord<String, Object, Object>> listenerContainer;
-    private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Override
     public void onMessage(MapRecord<String, Object, Object> message) {
@@ -36,9 +37,7 @@ public class RedisStreamConsumer
         log.info("수신 메세지: {}", message.getValue());
 
         // Ack 처리 (중복처리 방지)
-        redisTemplate.opsForStream()
-                .acknowledge(CONSUMER_GROUP, message)
-                .subscribe();
+        redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);
     }
 
     @Override
@@ -47,8 +46,7 @@ public class RedisStreamConsumer
         if (!isStreamConsumerGroupExist()) {
             log.info("컨슈머 그룹 생성");
             redisTemplate.opsForStream()
-                    .createGroup(STREAM_KEY, ReadOffset.from("0"), CONSUMER_GROUP)
-                    .subscribe();
+                    .createGroup(STREAM_KEY, ReadOffset.from("0"), CONSUMER_GROUP);
         }
 
         // 중재자 세팅
@@ -86,7 +84,7 @@ public class RedisStreamConsumer
     private boolean isStreamConsumerGroupExist() {
         // 소비자 그룹이 존재하는지 확인하는 로직
         return redisTemplate.opsForStream().groups(STREAM_KEY)
-                .toStream()
+                .stream()
                 .anyMatch(group -> group.groupName().equals(CONSUMER_GROUP));
     }
 }
