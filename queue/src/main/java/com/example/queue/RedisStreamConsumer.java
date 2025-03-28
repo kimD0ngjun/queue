@@ -34,23 +34,11 @@ public class RedisStreamConsumer
         log.info("수신 아이디: {}", message.getId());
         log.info("수신 메세지: {}", message.getValue());
 
-        int pendingSize = redisTemplate.opsForStream()
-                .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 100L)
-                .size();
-        log.info("미처리 메세지 사이즈: {}", pendingSize);
-
-        long queueSize = redisTemplate.opsForStream().size(STREAM_KEY) == null ? 0L : redisTemplate.opsForStream().size(STREAM_KEY);
-        log.info("큐 사이즈: {}", queueSize);
-
-        QueueDTO dto = new QueueDTO(
-                message.getId().getValue(),
-                (String) message.getValue().get("userId"),
-                pendingSize,
-                queueSize
-        );
+        String userId = (String) message.getValue().get("userId");
+        log.info("메세지 발신자 식별값: {}", userId);
 
         // SSE를 통해 클라이언트에게 전달
-        sseEmitterService.sendMessage(dto);
+        sseEmitterService.sendMessage(userId);
 
         // Ack 처리 (중복처리 방지)
         redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);
