@@ -13,19 +13,31 @@ import org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfig
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.stream.Consumer;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.ReadOffset;
+import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.stream.StreamMessageListenerContainer;
+import org.springframework.data.redis.stream.Subscription;
 
 import java.time.Duration;
 
 @Configuration
 @EnableAutoConfiguration(exclude={RedisAutoConfiguration.class, RedisReactiveAutoConfiguration.class}) // 자동 생성 설정과 커스텀 설정 충돌 방지
 public class ReactiveRedisConfig {
+
+    private static final String STREAM_KEY = "queue";
+    private static final String CONSUMER_GROUP = "consumers";
+    private static final String CONSUMER_NAME = "netty";
 
     @Value("${spring.data.redis.host}")
     private String host;
@@ -78,5 +90,19 @@ public class ReactiveRedisConfig {
                 .build();
 
         return new ReactiveRedisTemplate<>(connectionFactory, context);
+    }
+
+    // 스트림 메세지 리스너 세팅
+    @Bean(name = "listenerContainer")
+    public StreamMessageListenerContainer<String, MapRecord<String, Object, Object>> streamMessageListenerContainer(ReactiveRedisConnectionFactory connectionFactory) {
+        return StreamMessageListenerContainer.create(
+                (RedisConnectionFactory) reactiveRedisTemplate(connectionFactory).getConnectionFactory(),
+                StreamMessageListenerContainer
+                        .StreamMessageListenerContainerOptions.builder()
+                        .hashKeySerializer(new StringRedisSerializer())
+                        .hashValueSerializer(new Jackson2JsonRedisSerializer<>(Object.class))
+                        .pollTimeout(Duration.ofMillis(20))
+                        .build()
+        );
     }
 }
