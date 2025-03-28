@@ -1,14 +1,18 @@
 package com.example.queue;
 
+import io.lettuce.core.RedisException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Range;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.stream.Consumer;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.PendingMessage;
 import org.springframework.data.redis.connection.stream.PendingMessages;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,9 +27,16 @@ public class PendingMessageScheduler {
     private static final String CONSUMER_NAME = "netty";
 
     private final RedisTemplate<String, String> redisTemplate;
+    private LettuceConnectionFactory lettuceConnectionFactory;
 
-    @Scheduled(fixedRate = 10000)
+    @EventListener(value = {
+            RedisConnectionFailureException.class,
+            RedisSystemException.class,
+            RedisException.class
+    })
     public void processPendingMessages() {
+        log.info("Redis 관련 이슈 발생, 대기 처리 메세지 강제 소비");
+
         // 에러나 일시 연결 중단으로 대기 처리된 메세지들 처리
         PendingMessages pendingMessages = redisTemplate.opsForStream()
                 .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 100L);

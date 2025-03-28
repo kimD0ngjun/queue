@@ -5,10 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.DisposableBean;
-import org.springframework.data.redis.connection.stream.Consumer;
-import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.connection.stream.ReadOffset;
-import org.springframework.data.redis.connection.stream.StreamOffset;
+import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
@@ -36,8 +34,23 @@ public class RedisStreamConsumer
         log.info("수신 아이디: {}", message.getId());
         log.info("수신 메세지: {}", message.getValue());
 
+        int pendingSize = redisTemplate.opsForStream()
+                .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 100L)
+                .size();
+        log.info("미처리 메세지 사이즈: {}", pendingSize);
+
+        long queueSize = redisTemplate.opsForStream().size(STREAM_KEY);
+        log.info("큐 사이즈: {}", queueSize);
+
+        QueueDTO dto = new QueueDTO(
+                message.getId().getValue(),
+                (String) message.getValue().get("userId"),
+                pendingSize,
+                queueSize
+        );
+
         // SSE를 통해 클라이언트에게 전달
-        sseEmitterService.sendMessage("수신 메시지: " + message.getValue());
+        sseEmitterService.sendMessage(dto);
 
         // Ack 처리 (중복처리 방지)
         redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);
