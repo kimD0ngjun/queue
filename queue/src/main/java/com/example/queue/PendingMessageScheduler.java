@@ -38,7 +38,7 @@ public class PendingMessageScheduler {
 
             if (messages != null && !messages.isEmpty()) {
                 // 메시지 처리
-                MapRecord<String, Object, Object> message = messages.get(0);
+                MapRecord<String, Object, Object> message = messages.getFirst();
                 log.info("Pending 수신 아이디: {}", message.getId());
                 log.info("Pending 수신 메세지: {}", message.getValue());
 

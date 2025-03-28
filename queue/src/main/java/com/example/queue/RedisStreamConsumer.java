@@ -29,11 +29,15 @@ public class RedisStreamConsumer
 
     private final StreamMessageListenerContainer<String, MapRecord<String, Object, Object>> listenerContainer;
     private final RedisTemplate<String, String> redisTemplate;
+    private final SseEmitterService sseEmitterService;
 
     @Override
     public void onMessage(MapRecord<String, Object, Object> message) {
         log.info("수신 아이디: {}", message.getId());
         log.info("수신 메세지: {}", message.getValue());
+
+        // SSE를 통해 클라이언트에게 전달
+        sseEmitterService.sendMessage("수신 메시지: " + message.getValue());
 
         // Ack 처리 (중복처리 방지)
         redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);

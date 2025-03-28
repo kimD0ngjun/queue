@@ -1,5 +1,6 @@
 package com.example.queue;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -7,24 +8,21 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
-import java.io.IOException;
-
 @Slf4j
 @RestController
+@RequiredArgsConstructor
 public class QueueController {
 
-    @GetMapping(value = "/news", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<?>> queue() throws IOException {
+    private final SseEmitterService sseEmitterService;
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<?>> queue() {
         log.info("sse 시작");
 
-//        return Flux.fromIterable()
-//                .window(3)  // 데이터를 3개씩 분할
-//                .delayElements(Duration.ofSeconds(1))  // 각 윈도우마다 1초 대기
-//                .flatMap(Flux::collectList)  // 각 윈도우를 List로 변환
-//                .map(articles -> ServerSentEvent.<List<Article>>builder()
-//                        .event("news")  // 이벤트 타입 설정
-//                        .data(articles)  // 데이터 설정
-//                        .build());
-        return null;
+        return sseEmitterService.getStream()
+                .map(message -> ServerSentEvent.<String>builder()
+                        .event("queue") // 클라이언트에서 "queue" 이벤트 구
+                        .data(message) // 문자열 메세지 데이터 포함
+                        .build());
     }
 }
