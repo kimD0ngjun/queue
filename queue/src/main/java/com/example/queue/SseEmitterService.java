@@ -1,39 +1,51 @@
 package com.example.queue;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 public class SseEmitterService {
 
-    // 비동기 데이터 스트림 생성(중앙 허브 역할)
-    private final Sinks.Many<String> sink;
+    private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    // 사용자별 SSE 연결 생성
+    public SseEmitter createEmitter(String userId) {
+        SseEmitter emitter = new SseEmitter(60_000L); // 60초 타임아웃
+        emitters.put(userId, emitter);
 
-    public SseEmitterService() {
-        // 다중 구독자가 동시에 데이터를 받을 수 있게
-        this.sink = Sinks.many().multicast().onBackpressureBuffer();
+        log.info("emitter 생성 확인: {}", emitters.get(userId));
+
+        // 클라이언트 연결 종료 시 자동 삭제
+        emitter.onCompletion(() -> emitters.remove(userId));
+        emitter.onTimeout(() -> emitters.remove(userId));
+
+        log.info("SSE 연결 생성: messageId={}", userId);
+        return emitter;
     }
 
-    // 새로운 메세지 Sink Push
-    // 객체 파라미터일 경우여도 문자열 직렬화 과정 필요
+    // 특정 사용자에게 메시지 전송
     public void sendMessage(QueueDTO dto) {
-        try {
-            String message = objectMapper.writeValueAsString(dto);
-            sink.tryEmitNext(message);
-        } catch (JsonProcessingException e) {
-            log.error("메세지 파싱 에러: {}", e.getMessage());
-        }
-    }
+        String userId = dto.recordIdValue();
+        SseEmitter emitter = emitters.get(userId);
 
-    // SSE 엔드포인트에서 Flux 스트림 반환하여 클라이언트에게 푸시
-    public Flux<String> getStream() {
-        return sink.asFlux();
+        if (emitter != null) {
+            try {
+                String message = objectMapper.writeValueAsString(dto);
+                emitter.send(SseEmitter.event().name("queue").data(message));
+                log.info("SSE 메시지 전송: userId={}, message={}", userId, message);
+            } catch (Exception e) {
+                log.error("SSE 전송 실패: userId={}, error={}", userId, e.getMessage());
+                emitters.remove(userId); // 전송 실패 시 제거
+            }
+        } else {
+            log.warn("SSEEmitter 없음: userId={}", userId);
+        }
     }
 }

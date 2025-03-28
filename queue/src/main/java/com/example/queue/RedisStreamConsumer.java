@@ -39,7 +39,7 @@ public class RedisStreamConsumer
                 .size();
         log.info("미처리 메세지 사이즈: {}", pendingSize);
 
-        long queueSize = redisTemplate.opsForStream().size(STREAM_KEY);
+        long queueSize = redisTemplate.opsForStream().size(STREAM_KEY) == null ? 0L : redisTemplate.opsForStream().size(STREAM_KEY);
         log.info("큐 사이즈: {}", queueSize);
 
         QueueDTO dto = new QueueDTO(

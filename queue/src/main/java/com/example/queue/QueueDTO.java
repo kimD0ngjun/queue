@@ -1,7 +1,7 @@
 package com.example.queue;
 
 public record QueueDTO(
-        String userId,
+        String messageId,
         String recordIdValue,
         int pendingSize,
         long queueSize
