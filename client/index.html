@@ -47,6 +47,11 @@
     <button onclick="closeModal()" id="closeModalBtn">Close</button>
 </div>
 
+<!-- 처리 완료 메시지 -->
+<div id="completionMessage">
+    <h2>{userId} 님 처리가 완료되었습니다!</h2>
+</div>
+
 <script>
     let eventSource;
 
@@ -107,6 +112,7 @@
         if (data.percent === 100) {
             setTimeout(() => {
                 closeModal();
+                showCompletionMessage();
             }, 1000);
         }
     }
@@ -118,6 +124,13 @@
             eventSource = null;
         }
         document.getElementById("queueModal").classList.remove("show");
+    }
+
+    // 완료 메시지 표시
+    function showCompletionMessage() {
+        // 완료 메시지를 표시하고 입력 폼을 숨김
+        document.getElementById("completionMessage").style.display = "block";
+        document.getElementById("queueForm").style.display = "none";
     }
 </script>
 
