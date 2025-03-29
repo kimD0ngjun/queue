@@ -68,11 +68,11 @@
         })
             .then(response => {
                 if (response.ok) {
-                    console.log("Successfully joined queue!");
+                    console.log("대기열 참가 성공");
                     startSSE(userId);
                 }
             })
-            .catch(err => console.error("Error joining queue:", err));
+            .catch(err => console.error("대기열 참가 실패:", err));
     }
 
     // SSE 연결 시작
@@ -82,11 +82,12 @@
 
         eventSource.onmessage = function (event) {
             const data = JSON.parse(event.data);
+            console.log("수신 데이터: " + data);
             updateQueueStatus(data); // 대기열 상태 업데이트
         };
 
         eventSource.onerror = function (err) {
-            console.error("SSE connection error:", err);
+            console.error("SSE 연결 에러:", err);
             eventSource.close();
         };
 

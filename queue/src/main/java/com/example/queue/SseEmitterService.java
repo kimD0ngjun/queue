@@ -12,6 +12,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -24,6 +25,7 @@ public class SseEmitterService {
     private static final String CONSUMER_NAME = "netty";
 
     private Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+    private Map<String, MapRecord<String, Object, Object>> records = new ConcurrentHashMap<>();
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private final RedisTemplate<String, String> redisTemplate;
@@ -41,6 +43,12 @@ public class SseEmitterService {
         emitter.onTimeout(() -> emitters.remove(userId));
 
         log.info("SSE 연결 생성: userId={}", userId);
+
+        // 이미 수신돼서 대기중인 메세지가 있으면
+        if (records.containsKey(userId)) {
+            sendMessage(records.get(userId));
+        }
+
         return emitter;
     }
 
@@ -72,7 +80,20 @@ public class SseEmitterService {
                 emitters.remove(userId); // 전송 실패 시 제거
             }
         } else {
-            log.warn("SSEEmitter 없음: userId={}", userId);
+            log.warn("SSEEmitter 없음, 메시지 저장: userId={}", userId);
+            records.put(userId, message);
+
+            // 일정 시간 후 메시지를 삭제하는 작업 추가 (예: 10초 후)
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(10_000L);  // 10초 대기
+                    if (records.containsKey(userId)) {
+                        records.remove(userId);
+                        log.warn("SSE 연결 안 됨, 메시지 삭제: userId={}", userId);
+                    }
+                } catch (InterruptedException ignored) {
+                }
+            });
         }
     }
 
@@ -85,6 +106,7 @@ public class SseEmitterService {
         log.info("대기 메시지 개수: {}", pendingCount);
 
         int position = 0;
+        boolean find = false;
         for (PendingMessage pendingMessage : pendingMessages) {
             String messageId = pendingMessage.getId().getValue();
             log.info("대기 메세지 식별값: {}", messageId);
@@ -101,6 +123,7 @@ public class SseEmitterService {
                 log.info("클라이언트용 식별값(사용자 ID): {}", messageUserid);
 
                 if (userId.equals(messageUserid)) {
+                    find = true;
                     break;
                 }
             }
@@ -108,7 +131,9 @@ public class SseEmitterService {
             position++;
         }
 
-        return (int) ((1 - (position / (double) pendingCount)) * 100);
+        log.info("찾았나?: {}", find);
+        position = find ? position : (int) pendingCount;
+        return pendingCount == 0 ? 100 : (int) ((1 - (position / (double) pendingCount)) * 100);
     }
 
     private void closeSseConnection(String userId) {
