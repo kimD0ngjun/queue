@@ -71,10 +71,7 @@ public class SseEmitterService {
                 emitter.send(SseEmitter.event().name("queue").data(response));
                 log.info("SSE 메시지 전송: userId={}, message={}", userId, response);
 
-                if (percent == 100) { // 예시로 1등이 되었을 때 처리
-                    closeSseConnection(userId); // 1등 처리 후, SSE 연결 종료
-                    log.info("1등 처리(100프로 완료) 및 대기열에서 빠짐: userId={}", userId);
-                }
+                // SSE 연결 종료 책임은 클라이언트에게
             } catch (Exception e) {
                 log.error("SSE 전송 실패: userId={}, error={}", userId, e.getMessage());
                 emitters.remove(userId); // 전송 실패 시 제거
@@ -136,15 +133,15 @@ public class SseEmitterService {
         return pendingCount == 0 ? 100 : (int) ((1 - (position / (double) pendingCount)) * 100);
     }
 
-    private void closeSseConnection(String userId) {
-        SseEmitter emitter = emitters.get(userId);
-        if (emitter != null) {
-            try {
-                emitter.complete(); // SSE 연결을 종료
-                emitters.remove(userId); // emitters 제거
-            } catch (Exception e) {
-                log.error("SSE 연결 종료 실패: userId={}, error={}", userId, e.getMessage());
-            }
-        }
-    }
+//    private void closeSseConnection(String userId) {
+//        SseEmitter emitter = emitters.get(userId);
+//        if (emitter != null) {
+//            try {
+//                emitter.complete(); // SSE 연결을 종료
+//                emitters.remove(userId); // emitters 제거
+//            } catch (Exception e) {
+//                log.error("SSE 연결 종료 실패: userId={}, error={}", userId, e.getMessage());
+//            }
+//        }
+//    }
 }
