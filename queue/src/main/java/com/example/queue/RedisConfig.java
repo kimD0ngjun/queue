@@ -18,6 +18,7 @@ import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.Executors;
 
 @Configuration
 @EnableRedisRepositories
@@ -67,14 +68,15 @@ public class RedisConfig {
     // 스트림 메세지 리스너 세팅
     @Bean(name = "listenerContainer")
     public StreamMessageListenerContainer<String, MapRecord<String, Object, Object>> streamMessageListenerContainer(RedisConnectionFactory connectionFactory) {
-        return StreamMessageListenerContainer.create(
-                Objects.requireNonNull(redisTemplate(connectionFactory).getConnectionFactory()),
-                StreamMessageListenerContainer
-                        .StreamMessageListenerContainerOptions.builder()
+        StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, Object, Object>> options =
+                StreamMessageListenerContainer.StreamMessageListenerContainerOptions.builder()
+                        .batchSize(10)  // 한 번에 최대 10개의 메시지 읽기
+                        .executor(Executors.newFixedThreadPool(2)) // 병렬 처리 스레드 풀 (2개 스레드)
+                        .pollTimeout(Duration.ofSeconds(1)) // 1초마다 Redis에서 메시지 확인
                         .hashKeySerializer(new StringRedisSerializer())
                         .hashValueSerializer(new Jackson2JsonRedisSerializer<>(Object.class))
-                        .pollTimeout(Duration.ofMillis(20))
-                        .build()
-        );
+                        .build();
+
+        return StreamMessageListenerContainer.create(connectionFactory, options);
     }
 }

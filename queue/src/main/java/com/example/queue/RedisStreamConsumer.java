@@ -6,12 +6,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.Limit;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import org.springframework.data.redis.stream.Subscription;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -34,18 +39,21 @@ public class RedisStreamConsumer
         log.info("수신 아이디: {}", message.getId());
         log.info("수신 메세지: {}", message.getValue());
 
-        String userId = (String) message.getValue().get("userId");
-        log.info("메세지 발신자 식별값: {}", userId);
-
         // SSE를 통해 클라이언트에게 전달
-        sseEmitterService.sendMessage(userId);
-
-        // Ack 처리 (중복처리 방지)
-        redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);
+        sseEmitterService.sendMessage(message);
     }
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        // 큐 있는지 확인하고 없으면 큐 생성
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(STREAM_KEY))) {
+            log.info("스트림 'queue'가 존재하지 않음. 스트림 생성 및 첫 번째 메시지 추가.");
+            // 스트림에 첫 번째 메시지 추가
+            redisTemplate.opsForStream().add(STREAM_KEY, Map.of("userId", "systemInit"));
+        } else {
+            log.info("스트림 'queue'가 이미 존재합니다.");
+        }
+
         // 컨슈머 그룹 세팅
         if (!isStreamConsumerGroupExist()) {
             log.info("컨슈머 그룹 생성");
@@ -59,9 +67,9 @@ public class RedisStreamConsumer
                 StreamOffset.create(STREAM_KEY, ReadOffset.lastConsumed()),
                 this
         );
-//
-//        // 5초 간격으로 정보 취득(블로킹 처리)
-//        this.subscription.await(Duration.ofSeconds(5));
+
+        // 5초 간격으로 정보 취득(블로킹 처리)
+        this.subscription.await(Duration.ofSeconds(5));
 
         // Redis Listen 시작
         this.listenerContainer.start();

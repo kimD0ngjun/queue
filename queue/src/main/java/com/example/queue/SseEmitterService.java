@@ -34,6 +34,7 @@ public class SseEmitterService {
         emitters.put(userId, emitter);
 
         log.info("emitter 생성 확인: {}", emitters.get(userId));
+        emitters.forEach((k, v) -> log.info("Emitter 키: {}, 값: {}", k, v));
 
         // 클라이언트 연결 종료 시 자동 삭제
         emitter.onCompletion(() -> emitters.remove(userId));
@@ -44,18 +45,28 @@ public class SseEmitterService {
     }
 
     // 특정 사용자에게 메시지 전송
-    public void sendMessage(String userId) {
+    public void sendMessage(MapRecord<String, Object, Object> message) {
+        String userId = (String) message.getValue().get("userId");
+        log.info("메세지 발신자 식별값: {}", userId);
+
         int percent = getProgressPercentage(userId);
         log.info("현재 포지션: {}", percent);
+
+        redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message); // Ack 처리
 
         SseEmitter emitter = emitters.get(userId);
         QueueDTO dto = new QueueDTO(userId, percent);
 
         if (emitter != null) {
             try {
-                String message = objectMapper.writeValueAsString(dto);
-                emitter.send(SseEmitter.event().name("queue").data(message));
-                log.info("SSE 메시지 전송: userId={}, message={}", userId, message);
+                String response = objectMapper.writeValueAsString(dto);
+                emitter.send(SseEmitter.event().name("queue").data(response));
+                log.info("SSE 메시지 전송: userId={}, message={}", userId, response);
+
+                if (percent == 100) { // 예시로 1등이 되었을 때 처리
+                    closeSseConnection(userId); // 1등 처리 후, SSE 연결 종료
+                    log.info("1등 처리(100프로 완료) 및 대기열에서 빠짐: userId={}", userId);
+                }
             } catch (Exception e) {
                 log.error("SSE 전송 실패: userId={}, error={}", userId, e.getMessage());
                 emitters.remove(userId); // 전송 실패 시 제거
@@ -66,35 +77,49 @@ public class SseEmitterService {
     }
 
     private int getProgressPercentage(String userId) {
+        // temp
         PendingMessages pendingMessages = redisTemplate.opsForStream()
                 .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 10000L);
 
-        long pendingCount = pendingMessages.stream().count(); // 자신을 포함한 미처리 메세지 갯수 세림
-        log.info("미처리 메시지 개수: {}", pendingCount);
-
-        List<MapRecord<String, Object, Object>> queue
-                = redisTemplate.opsForStream().range(STREAM_KEY, Range.unbounded(), Limit.limit().count((int) pendingCount));
+        long pendingCount = pendingMessages.stream().count(); // 소비는 됐으나 자신을 포함한 미처리 메세지 갯수 세림
+        log.info("대기 메시지 개수: {}", pendingCount);
 
         int position = 0;
-        assert queue != null;
-        for (MapRecord<String, Object, Object> record : queue) {
-            String recordUserId = (String) record.getValue().get("userId");
-            if (userId.equals(recordUserId)) {
-                int progressPercentage;
+        for (PendingMessage pendingMessage : pendingMessages) {
+            String messageId = pendingMessage.getId().getValue();
+            log.info("대기 메세지 식별값: {}", messageId);
 
-                if (pendingCount == 0) {
-                    progressPercentage = 100; // 대기열이 없으면 100% 완료
-                } else {
-                    progressPercentage = (int) ((1 - (position / (double) pendingCount)) * 100);
+            // 메시지의 ID로부터 실제 메시지를 조회
+            List<MapRecord<String, Object, Object>> messages = redisTemplate.opsForStream()
+                    .range(STREAM_KEY, Range.closed(messageId, messageId));
+
+            assert messages != null;
+            if (!messages.isEmpty()) {
+                MapRecord<String, Object, Object> messageValue = messages.getFirst();
+                log.info("메세지 내용: {}", messageValue);
+                String messageUserid = (String) messageValue.getValue().get("userId");
+                log.info("클라이언트용 식별값(사용자 ID): {}", messageUserid);
+
+                if (userId.equals(messageUserid)) {
+                    break;
                 }
-
-                log.info("현재 순위: {}, 대기열 크기: {}, 진행률: {}%", position, pendingCount, progressPercentage);
-
-                return progressPercentage;
             }
+
             position++;
         }
 
-        return -1; // 유저가 대기열에 없으면 -1 반환
+        return (int) ((1 - (position / (double) pendingCount)) * 100);
+    }
+
+    private void closeSseConnection(String userId) {
+        SseEmitter emitter = emitters.get(userId);
+        if (emitter != null) {
+            try {
+                emitter.complete(); // SSE 연결을 종료
+                emitters.remove(userId); // emitters 제거
+            } catch (Exception e) {
+                log.error("SSE 연결 종료 실패: userId={}, error={}", userId, e.getMessage());
+            }
+        }
     }
 }
