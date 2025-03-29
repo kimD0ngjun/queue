@@ -48,8 +48,8 @@
 </div>
 
 <!-- 처리 완료 메시지 -->
-<div id="completionMessage">
-    <h2>{userId} 님 처리가 완료되었습니다!</h2>
+<div id="completionMessage" style="display: none;">
+    <h3 id="completionText"></h3>
 </div>
 
 <script>
@@ -112,7 +112,7 @@
         if (data.percent === 100) {
             setTimeout(() => {
                 closeModal();
-                showCompletionMessage();
+                showCompletionMessage(data.userId);
             }, 1000);
         }
     }
@@ -127,9 +127,11 @@
     }
 
     // 완료 메시지 표시
-    function showCompletionMessage() {
-        // 완료 메시지를 표시하고 입력 폼을 숨김
+    function showCompletionMessage(userId) {
+        console.log("완료된 사용자: " + userId)
+
         document.getElementById("completionMessage").style.display = "block";
+        document.getElementById("completionText").textContent = `${userId} 님 처리가 완료되었습니다.`;
         document.getElementById("queueForm").style.display = "none";
     }
 </script>

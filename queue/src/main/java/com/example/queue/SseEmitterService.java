@@ -25,7 +25,8 @@ public class SseEmitterService {
     private static final String CONSUMER_NAME = "netty";
 
     private Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
-    private Map<String, MapRecord<String, Object, Object>> records = new ConcurrentHashMap<>();
+//    private Map<String, MapRecord<String, Object, Object>> records = new ConcurrentHashMap<>();
+    private Map<String, QueueDTO> records = new ConcurrentHashMap<>();
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private final RedisTemplate<String, String> redisTemplate;
@@ -46,7 +47,16 @@ public class SseEmitterService {
 
         // 이미 수신돼서 대기중인 메세지가 있으면
         if (records.containsKey(userId)) {
-            sendMessage(records.get(userId));
+            try {
+                String response = objectMapper.writeValueAsString(records.get(userId));
+                emitter.send(SseEmitter.event().name("queue").data(response));
+                log.info("SSE 메시지 전송: userId={}, message={}", userId, response);
+
+                // SSE 연결 종료 책임은 클라이언트에게
+            } catch (Exception e) {
+                log.error("SSE 전송 실패: userId={}, error={}", userId, e.getMessage());
+                emitters.remove(userId); // 전송 실패 시 제거
+            }
         }
 
         return emitter;
@@ -78,9 +88,9 @@ public class SseEmitterService {
             }
         } else {
             log.warn("SSEEmitter 없음, 메시지 저장: userId={}", userId);
-            records.put(userId, message);
+            records.put(userId, dto);
 
-            // 일정 시간 후 메시지를 삭제하는 작업 추가 (예: 10초 후)
+            // 10초 후에 일정 시간 후 메시지를 삭제하는 작업 추가
             CompletableFuture.runAsync(() -> {
                 try {
                     Thread.sleep(10_000L);  // 10초 대기
