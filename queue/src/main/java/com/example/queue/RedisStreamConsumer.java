@@ -39,8 +39,11 @@ public class RedisStreamConsumer
         log.info("수신 아이디: {}", message.getId());
         log.info("수신 메세지: {}", message.getValue());
 
-        // SSE를 통해 클라이언트에게 전달
+        // SSE를 통해 클라이언트에게 각 사용자별 진행률 계산용 전달
         sseEmitterService.sendMessage(message);
+
+        // 수신 메세지 Ack 처리
+        redisTemplate.opsForStream().acknowledge(CONSUMER_GROUP, message);
     }
 
     @Override
@@ -61,7 +64,7 @@ public class RedisStreamConsumer
                     .createGroup(STREAM_KEY, ReadOffset.from("0"), CONSUMER_GROUP);
         }
 
-        // 중재자 세팅
+        // 중재자 세팅(단일 컨슈머 그룹에서 메세지를 레디스 스트림 순서대로 수신)
         this.subscription = listenerContainer.receive(
                 Consumer.from(CONSUMER_GROUP, CONSUMER_NAME),
                 StreamOffset.create(STREAM_KEY, ReadOffset.lastConsumed()),
