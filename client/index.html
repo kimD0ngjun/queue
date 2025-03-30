@@ -27,6 +27,21 @@
         .modal.show {
             display: block;
         }
+        #loadingBarContainer {
+            width: 100%;
+            height: 20px;
+            background-color: #ddd;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #loadingBar {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -44,6 +59,12 @@
     <h2>현재 대기열 상태</h2>
     <p>User ID: <span id="modalUserId"></span></p>
     <p>진행률: <span id="modalPosition"></span>%</p>
+
+    <!-- 로딩 바 -->
+    <div id="loadingBarContainer">
+        <div id="loadingBar"></div>
+    </div>
+
     <button onclick="closeModal()" id="closeModalBtn">Close</button>
 </div>
 
@@ -114,6 +135,9 @@
     // 모달 내용 업데이트
     function updateQueueStatus(data) {
         document.getElementById("modalPosition").textContent = data.percent;
+
+        const loadingBar = document.getElementById("loadingBar");
+        loadingBar.style.width = `${data.percent}%`;
 
         // 100%가 되면 모달을 닫고 연결 종료
         if (data.percent >= 100) {

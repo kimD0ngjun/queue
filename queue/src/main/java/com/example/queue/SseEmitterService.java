@@ -81,6 +81,9 @@ public class SseEmitterService {
                     String response = objectMapper.writeValueAsString(dto);
                     emitter.send(SseEmitter.event().name("queue").data(response));
                     // SSE 연결 종료 책임은 클라이언트에게
+                    if (processPercent >= 100) {
+                        emitters.remove(clientUserId);
+                    }
                 } catch (Exception e) {
                     emitters.remove(clientUserId); // 전송 실패 시 제거
                 }
