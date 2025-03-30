@@ -40,9 +40,6 @@ public class RedisStreamConsumer
      */
     @Override
     public void onMessage(MapRecord<String, Object, Object> message) {
-        log.info("수신 아이디: {}", message.getId());
-        log.info("수신 메세지: {}", message.getValue());
-
         // SSE를 통해 클라이언트에게 각 사용자별 진행률 계산용 전달
         sseEmitterService.sendMessage(message);
 

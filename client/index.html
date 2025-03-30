@@ -116,11 +116,11 @@
         document.getElementById("modalPosition").textContent = data.percent;
 
         // 100%가 되면 모달을 닫고 연결 종료
-        if (data.percent === 100) {
+        if (data.percent >= 100) {
             setTimeout(() => {
                 closeModal();
                 showCompletionMessage(data.userId);
-            }, 1000);
+            }, 500);
         }
     }
 
