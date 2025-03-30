@@ -72,22 +72,29 @@
             }
         })
             .then(response => {
-                if (response.ok) {
-                    console.log("대기열 참가 성공");
-                    startSSE(userId);
+                if (!response.ok) {
+                    throw new Error("대기열 참가 실패");
                 }
+                return response.json();
+            })
+            .then(data => {
+                console.log("대기열 참가 성공:", data);
+                const userId = data.userId;
+                const messageId = data.messageId;
+                console.log("사용자: " + userId + " 메세지: " + messageId);
+                startSSE(userId, messageId); // SSE 시작
             })
             .catch(err => console.error("대기열 참가 실패:", err));
     }
 
     // SSE 연결 시작
-    function startSSE(userId) {
+    function startSSE(userId, messageId) {
         // 모달 표시
         document.getElementById("queueModal").classList.add("show");
         document.getElementById("modalUserId").textContent = userId;
 
         // SSE 연결
-        eventSource = new EventSource(`http://localhost:8081/stream?userId=${userId}`, {
+        eventSource = new EventSource(`http://localhost:8081/stream?userId=${userId}&messageId=${messageId}`, {
             withCredentials: true,
         });
 

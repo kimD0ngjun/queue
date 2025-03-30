@@ -26,15 +26,18 @@ public class SseEmitterService {
 
     private Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
     private Map<String, QueueDTO> records = new ConcurrentHashMap<>();
-    private Map<String, Long> messageTimestamps = new ConcurrentHashMap<>();
+    private Map<String, String> messageIds = new ConcurrentHashMap<>();
+    private String firstMessageId;
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private final RedisTemplate<String, String> redisTemplate;
 
     // 사용자별 SSE 연결 생성
-    public SseEmitter createEmitter(String userId) {
+    public SseEmitter createEmitter(String userId, String messageId) {
+        messageIds.put(userId, messageId); // Stream 메세지 ID 저장
+
         SseEmitter emitter = new SseEmitter(60_000L); // 60초 타임아웃
-        emitters.put(userId, emitter);
+        emitters.put(userId, emitter); // SSE Emitter 저장
 
         // 클라이언트 연결 종료 시 자동 삭제
         emitter.onCompletion(() -> emitters.remove(userId));
@@ -66,20 +69,44 @@ public class SseEmitterService {
         String userId = (String) message.getValue().get("userId");
         log.info("메세지 발신자 식별값: {}", userId);
 
-        log.info("emitter 임시 저장소 크기: {}", emitters.size());
-
+        // 아직 emitter가 생성되지 않음(메세지가 emitter 생성보다 먼저 도착)
+        int percent;
         if (!emitters.containsKey(userId)) {
             log.info("아직 {} SSE Emitter 생성 안됨", userId);
-            QueueDTO dto = new QueueDTO(userId, 100);
+
+            // 아직 메세지 ID 도착 안 했다면?
+            if (!messageIds.containsKey(userId)) {
+                percent = 0;
+            } else {
+                String userMessageId = messageIds.get(userId);
+                long currentTime = extractTimeStamp(messageId);
+                long userTime = extractTimeStamp(userMessageId);
+
+                percent = (int) ((int) 100.0 * Math.exp(-1 * (userTime - currentTime)));
+            }
+
+            log.info("emitter 생성 안된 시점에서 사용자 및 진행률: {}, {}", userId, percent);
+            QueueDTO dto = new QueueDTO(userId, percent);
             records.put(userId, dto);
         }
+
+        // emitter가 생성되어 있다면
         emitters.forEach((clientUserId, emitter) -> {
-//            String userMessageId = getMessageId(clientUserId);
-//            long currentTimeStamp = extractTimeStamp(messageId);
-//            long userTimeStamp = extractTimeStamp(userMessageId);
-//
-//            int percent = (userTimeStamp != 0L) ? (int) (((double) currentTimeStamp / userTimeStamp) * 100) : 0;
-            QueueDTO dto = new QueueDTO(clientUserId, 100);
+            log.info("emitter 존재: {}", clientUserId);
+            int processPercent;
+
+            if (!messageIds.containsKey(userId)) {
+                processPercent = 0;
+            } else {
+                String clientMessageId = messageIds.get(clientUserId);
+                long currentTime = extractTimeStamp(messageId);
+                long userTime = extractTimeStamp(clientMessageId);
+
+                processPercent = (int) ((int) 100.0 * Math.exp(-1 * (userTime - currentTime)));
+            }
+
+            log.info("현재 사용자 및 진행률: {}, {}", clientUserId, processPercent);
+            QueueDTO dto = new QueueDTO(clientUserId, processPercent);
 
             if (emitter != null) {
                 try {
@@ -99,58 +126,6 @@ public class SseEmitterService {
         });
     }
 
-    private int getQueuePercentage(String userId) {
-        long messageTimeStamp;
-
-        if (messageTimestamps.containsKey(userId)) {
-            messageTimeStamp = messageTimestamps.get(userId);
-        } else {
-            PendingMessages pendingMessages = redisTemplate.opsForStream()
-                .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 10000L);
-        }
-
-        return 0;
-    }
-
-//
-//    private String getMessageId(String userId) {
-//        String userMessageId = messageIds.get(userId);
-//        if (userMessageId != null) {
-//            return userMessageId;
-//        }
-//
-//        PendingMessages pendingMessages = redisTemplate.opsForStream()
-//                .pending(STREAM_KEY, Consumer.from(CONSUMER_GROUP, CONSUMER_NAME), Range.unbounded(), 10000L);
-//
-//        PendingMessage userPendingMessage = pendingMessages.stream().filter(
-//                pendingMessage -> {
-//                    String messageId = pendingMessage.getIdAsString();
-//                    log.info("대기 메세지 식별값 ID: {}", messageId);
-//
-//                    List<MapRecord<String, Object, Object>> messages = redisTemplate.opsForStream()
-//                            .range(STREAM_KEY, Range.closed(messageId, messageId));
-//
-//                    assert messages != null;
-//                    if (!messages.isEmpty()) {
-//                        MapRecord<String, Object, Object> messageValue = messages.getFirst();
-//                        log.info("메세지 내용: {}", messageValue);
-//                        String messageUserid = (String) messageValue.getValue().get("userId");
-//                        log.info("클라이언트용 식별값(사용자 ID): {}", messageUserid);
-//
-//                        return userId.equals(messageUserid);
-//                    }
-//
-//                    return false;
-//                }
-//        ).findFirst().orElse(null);
-//
-//        assert userPendingMessage != null;
-//        userMessageId = userPendingMessage.getId().getValue();
-//        messageIds.put(userId, userMessageId);
-//
-//        return userMessageId;
-//    }
-//
     private long extractTimeStamp(String messageId) {
         Pattern pattern = Pattern.compile("^(\\d+)-");
         Matcher matcher = pattern.matcher(messageId);

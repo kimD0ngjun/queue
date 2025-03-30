@@ -16,8 +16,11 @@ public class QueueController {
     private final SseEmitterService sseEmitterService;
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter queue(@RequestParam("userId") String userId) {
-        log.info("sse 시작: {}", userId);
-        return sseEmitterService.createEmitter(userId);
+    public SseEmitter queue(
+            @RequestParam("userId") String userId,
+            @RequestParam("messageId") String messageId
+    ) {
+        log.info("sse 시작: {} / {}", userId, messageId);
+        return sseEmitterService.createEmitter(userId, messageId);
     }
 }
