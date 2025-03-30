@@ -34,6 +34,10 @@ public class RedisStreamConsumer
     private final RedisTemplate<String, String> redisTemplate;
     private final SseEmitterService sseEmitterService;
 
+    /**
+     * 메세지를 onMessage 메소드로 받아오는 시점부터 XREADGROUP -> 이때부터 Pending 상태 -> XACK 처리를 해줘야 대기열에서 벗어남(중복 작업 x)
+     * @param message
+     */
     @Override
     public void onMessage(MapRecord<String, Object, Object> message) {
         log.info("수신 아이디: {}", message.getId());
